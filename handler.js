@@ -23,7 +23,7 @@ export async function handler(chatUpdate) {
 
         const isOwner = [global.owner[0][0]].map(v => v.replace(/[^0-9]/g, "") + '@s.whatsapp.net').includes(m.sender) || m.fromMe
         
-        // --- BUSCADOR EN SHORTS ---
+        // --- BUSCADOR EN SWORD ---
         for (let name in global.plugins) {
             let plugin = global.plugins[name]
             if (!plugin || plugin.disabled) continue
