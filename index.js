@@ -19,17 +19,17 @@ async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState('sessions')
     const { version } = await fetchLatestBaileysVersion()
 
-    // --- CARGA DE SHORTS ---
-    const shortsFolder = path.join(__dirname, 'shorts')
-    if (!fs.existsSync(shortsFolder)) fs.mkdirSync(shortsFolder)
-    const shortFiles = fs.readdirSync(shortsFolder).filter(file => file.endsWith('.js'))
+    // --- CARGA DE ESPADAS (COMANDOS) ---
+    const swordFolder = path.join(__dirname, 'sword')
+    if (!fs.existsSync(swordFolder)) fs.mkdirSync(swordFolder)
+    const swordFiles = fs.readdirSync(swordFolder).filter(file => file.endsWith('.js'))
     
-    for (let file of shortFiles) {
+    for (let file of swordFiles) {
         try {
-            const plugin = await import(`./shorts/${file}`)
+            const plugin = await import(`./sword/${file}`)
             global.plugins[file] = plugin.default || plugin
         } catch (e) {
-            console.error(`Error cargando short: ${file}`, e)
+            console.error(`Error al desenvainar ${file}:`, e)
         }
     }
 
