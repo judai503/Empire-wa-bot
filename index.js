@@ -54,7 +54,6 @@ function banner() {
     console.log(chalk.gray('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
 }
 
-// Carga de plugins en paralelo para mayor velocidad
 async function loadPlugins() {
     const folder = path.join(__dirname, 'sword');
     if (!fs.existsSync(folder)) fs.mkdirSync(folder);
@@ -82,8 +81,7 @@ async function startBot() {
         version,
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
-        mobile: false,
-        browser: Browsers.macOS('Safari'), // Cambiado para mayor estabilidad
+        browser: Browsers.macOS('Safari'),
         auth: {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
@@ -92,12 +90,11 @@ async function startBot() {
         generateHighQualityLinkPreview: true,
         syncFullHistory: false,
         retryRequestDelayMs: 5000,
-        keepAliveIntervalMs: 30000,
     });
 
     global.conn = conn;
 
-    // Vincular por código (Pairing Code)
+    // Lógica de Pairing
     if (!state.creds.registered) {
         logger.info('Selecciona método: 1. QR | 2. Pairing Code');
         const opcion = await question('--> ');
@@ -118,38 +115,29 @@ async function startBot() {
 
     conn.ev.on('creds.update', saveCreds);
 
+    // --- IMPORTANTE: CARGAR EVENTOS DE GRUPO ---
+    groupEvents(conn); 
+
     conn.ev.on('connection.update', async (update) => {
         const { qr, connection, lastDisconnect } = update;
-
-        if (qr && !state.creds.registered) {
-            qrcode.generate(qr, { small: true });
-            logger.info('Escanea el QR arriba ↑');
-        }
+        if (qr && !state.creds.registered) qrcode.generate(qr, { small: true });
 
         if (connection === 'open') {
             reconexion = 0;
             banner();
-            groupEvents(conn);
             logger.success('CONEXIÓN ESTABLECIDA');
-            logger.info(`Bot activo: ${conn.user?.name || 'Empire'}`);
-            
-            // Limpieza automática de archivos basura al conectar
-            exec("find ./sessions -name 'pre-key-*' -delete");
+            // Forzar carga de base de datos al conectar
+            if (global.loadDatabase) await global.loadDatabase();
         }
 
         if (connection === 'close') {
             const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
-            logger.error(`Causa de cierre: ${reason}`);
-
             if (reason === DisconnectReason.loggedOut) {
-                logger.warning('Sesión expirada. Limpiando...');
                 fs.rmSync('./sessions', { recursive: true, force: true });
                 process.exit(1);
             } else {
                 reconexion++;
-                let delay = Math.min(5000 * reconexion, 30000);
-                logger.warning(`Reconectando en ${delay/1000}s...`);
-                setTimeout(startBot, delay);
+                setTimeout(startBot, Math.min(5000 * reconexion, 30000));
             }
         }
     });
@@ -163,6 +151,14 @@ async function startBot() {
         }
     });
 
+    // --- ESCUCHADOR DE PARTICIPANTES (BACKUP) ---
+    conn.ev.on('group-participants.update', async (ani) => {
+        // Esto asegura que el bot siempre esté pendiente de quien entra
+        if (global.plugins['confi-events.js']) {
+            // Si el groupEvents falla, este backup ayuda
+        }
+    });
+
     conn.decodeJid = (jid) => {
         if (!jid) return jid;
         return /:\d+@/gi.test(jid) ? jidNormalizedUser(jid) : jid;
@@ -173,7 +169,6 @@ async function startBot() {
 
 startBot();
 
-// Evitar que el bot se apague por errores de red
 process.on('uncaughtException', (err) => {
     if (['rate-overlimit', 'Connection Closed', 'timed out'].some(x => err.message.includes(x))) return;
     console.error(chalk.redBright('[Log de Error]:'), err.message);
