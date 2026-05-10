@@ -25,6 +25,8 @@ import readline from 'readline'
 import { fileURLToPath, pathToFileURL } from 'url'
 
 import { handler } from './handler.js'
+import { logger } from './shield/logger.js'
+import groupEvents from './sword/confi-events.js'
 
 // =========================
 // DIRNAME
@@ -38,16 +40,21 @@ const __dirname = path.dirname(
 // CREAR CARPETAS
 // =========================
 
-if (!fs.existsSync('./sessions')) {
-    fs.mkdirSync('./sessions', { recursive: true })
-}
+const folders = [
+    './sessions',
+    './tmp',
+    './sword',
+    './shield'
+]
 
-if (!fs.existsSync('./tmp')) {
-    fs.mkdirSync('./tmp', { recursive: true })
-}
+for (const folder of folders) {
 
-if (!fs.existsSync('./sword')) {
-    fs.mkdirSync('./sword', { recursive: true })
+    if (!fs.existsSync(folder)) {
+
+        fs.mkdirSync(folder, {
+            recursive: true
+        })
+    }
 }
 
 // =========================
@@ -148,15 +155,14 @@ async function loadPlugins() {
             global.plugins[file] =
                 plugin.default || plugin
 
-            console.log(
-                chalk.green('✓'),
-                chalk.cyan(file)
+            logger.success(
+                `Plugin cargado: ${file}`
             )
 
         } catch (e) {
 
-            console.log(
-                chalk.red(`✗ ${file}`)
+            logger.error(
+                `Error cargando ${file}`
             )
 
             console.error(e)
@@ -196,18 +202,14 @@ function watchPlugins() {
             global.plugins[filename] =
                 plugin.default || plugin
 
-            console.log(
-                chalk.yellow(
-                    `🛠️ Plugin actualizado: ${filename}`
-                )
+            logger.info(
+                `Plugin actualizado: ${filename}`
             )
 
         } catch (e) {
 
-            console.log(
-                chalk.red(
-                    `❌ Error recargando ${filename}`
-                )
+            logger.error(
+                `Error recargando ${filename}`
             )
 
             console.error(e)
@@ -247,10 +249,6 @@ async function startBot() {
 
     banner()
 
-    // =========================
-    // AUTH
-    // =========================
-
     const {
         state,
         saveCreds
@@ -262,17 +260,9 @@ async function startBot() {
         version
     } = await fetchLatestBaileysVersion()
 
-    // =========================
-    // LOAD PLUGINS
-    // =========================
-
     await loadPlugins()
 
     watchPlugins()
-
-    // =========================
-    // SOCKET
-    // =========================
 
     const conn = makeWASocket({
 
@@ -312,21 +302,23 @@ async function startBot() {
     global.conn = conn
 
     // =========================
+    // GROUP EVENTS
+    // =========================
+
+    groupEvents(conn)
+
+    // =========================
     // PAIRING CODE
     // =========================
 
     if (!state.creds.registered) {
 
-        console.log(
-            chalk.yellowBright(
-                '\n📲 INGRESA EL NÚMERO PARA VINCULAR EL BOT\n'
-            )
+        logger.info(
+            'Ingresa el número para vincular el bot'
         )
 
         const phoneNumber = await question(
-            chalk.cyanBright(
-                '➡️ Número (Ejemplo: 50377777777): '
-            )
+            '➡️ Número: '
         )
 
         setTimeout(async () => {
@@ -345,22 +337,14 @@ async function startBot() {
                         ?.match(/.{1,4}/g)
                         ?.join('-') || code
 
-                console.log(
-                    chalk.black.bgGreen.bold(
-                        '\n CÓDIGO DE VINCULACIÓN '
-                    ),
-
-                    chalk.white.bgMagenta.bold(
-                        ` ${formatted} `
-                    )
+                logger.success(
+                    `Código: ${formatted}`
                 )
 
             } catch (e) {
 
-                console.log(
-                    chalk.red(
-                        '❌ Error generando pairing code'
-                    )
+                logger.error(
+                    'Error generando pairing code'
                 )
 
                 console.error(e)
@@ -398,10 +382,8 @@ async function startBot() {
 
             if (qr) {
 
-                console.log(
-                    chalk.greenBright(
-                        '\n📱 ESCANEA EL QR\n'
-                    )
+                logger.info(
+                    'Escanea el QR'
                 )
 
                 qrcode.generate(
@@ -418,10 +400,8 @@ async function startBot() {
 
             if (connection === 'connecting') {
 
-                console.log(
-                    chalk.yellow(
-                        '🔄 Conectando a WhatsApp...'
-                    )
+                logger.info(
+                    'Conectando a WhatsApp...'
                 )
             }
 
@@ -433,34 +413,20 @@ async function startBot() {
 
                 banner()
 
-                console.log(
-                    chalk.greenBright(
-                        '✅ CONECTADO EXITOSAMENTE'
-                    )
+                logger.success(
+                    'CONECTADO EXITOSAMENTE'
                 )
 
-                console.log(
-                    chalk.cyanBright(
-                        `🤖 BOT: ${global.botname}`
-                    )
+                logger.info(
+                    `BOT: ${global.botname}`
                 )
 
-                console.log(
-                    chalk.yellowBright(
-                        `⚡ Plugins: ${Object.keys(global.plugins).length}`
-                    )
+                logger.info(
+                    `Plugins: ${Object.keys(global.plugins).length}`
                 )
 
-                console.log(
-                    chalk.magentaBright(
-                        `🧠 Usuario: ${conn.user?.name || 'Desconocido'}`
-                    )
-                )
-
-                console.log(
-                    chalk.gray(
-                        '━━━━━━━━━━━━━━━━━━━━━━━'
-                    )
+                logger.info(
+                    `Usuario: ${conn.user?.name || 'Desconocido'}`
                 )
             }
 
@@ -475,10 +441,8 @@ async function startBot() {
                         lastDisconnect?.error
                     )?.output?.statusCode
 
-                console.log(
-                    chalk.red(
-                        `❌ Conexión cerrada (${reason})`
-                    )
+                logger.error(
+                    `Conexión cerrada (${reason})`
                 )
 
                 if (
@@ -486,10 +450,8 @@ async function startBot() {
                     DisconnectReason.loggedOut
                 ) {
 
-                    console.log(
-                        chalk.yellow(
-                            '🔄 Reconectando...'
-                        )
+                    logger.warning(
+                        'Reconectando...'
                     )
 
                     setTimeout(
@@ -499,16 +461,12 @@ async function startBot() {
 
                 } else {
 
-                    console.log(
-                        chalk.redBright(
-                            '\n⚠️ Sesión cerrada'
-                        )
+                    logger.error(
+                        'Sesión cerrada'
                     )
 
-                    console.log(
-                        chalk.redBright(
-                            '🗑️ Elimina la carpeta sessions'
-                        )
+                    logger.warning(
+                        'Elimina la carpeta sessions'
                     )
                 }
             }
@@ -532,10 +490,8 @@ async function startBot() {
 
             } catch (e) {
 
-                console.log(
-                    chalk.redBright(
-                        '❌ Error en handler'
-                    )
+                logger.error(
+                    'Error en handler'
                 )
 
                 console.error(e)
