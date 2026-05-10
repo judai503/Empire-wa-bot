@@ -44,33 +44,86 @@ const handler = async function (chatUpdate) {
 
         if (typeof user !== 'object') {
 
-            global.db.data.users[m.sender] = {
+            global.db.data.users[m.sender] = {}
 
-                monedas: 10,
-
-                name:
-                    m.name ||
-                    'Sin nombre'
-            }
+            user =
+                global.db.data.users[m.sender]
         }
+
+        // =========================
+        // USER DATA
+        // =========================
+
+        if (!('name' in user))
+            user.name =
+                m.name || 'Sin nombre'
+
+        if (!('monedas' in user))
+            user.monedas = 100
+
+        if (!('exp' in user))
+            user.exp = 0
+
+        if (!('nivel' in user))
+            user.nivel = 1
+
+        if (!('diamantes' in user))
+            user.diamantes = 0
+
+        if (!('energia' in user))
+            user.energia = 100
+
+        if (!('bank' in user))
+            user.bank = 0
+
+        if (!('lastclaim' in user))
+            user.lastclaim = 0
+
+        if (!('premium' in user))
+            user.premium = false
+
+        if (!('banned' in user))
+            user.banned = false
 
         // =========================
         // CHAT
         // =========================
 
-        if (!global.db.data.chats[m.chat]) {
+        let chat =
+            global.db.data.chats[m.chat]
 
-            global.db.data.chats[m.chat] = {
+        if (typeof chat !== 'object') {
 
-                welcome: false,
-                modoadmin: false,
-                antilink: false,
-                antillamada: false,
-                antispam: false,
-                antiprivado: false,
-                antionceview: false
-            }
+            global.db.data.chats[m.chat] = {}
+
+            chat =
+                global.db.data.chats[m.chat]
         }
+
+        // =========================
+        // CHAT DATA
+        // =========================
+
+        if (!('welcome' in chat))
+            chat.welcome = false
+
+        if (!('modoadmin' in chat))
+            chat.modoadmin = false
+
+        if (!('antilink' in chat))
+            chat.antilink = false
+
+        if (!('antillamada' in chat))
+            chat.antillamada = false
+
+        if (!('antispam' in chat))
+            chat.antispam = false
+
+        if (!('antiprivado' in chat))
+            chat.antiprivado = false
+
+        if (!('antionceview' in chat))
+            chat.antionceview = false
 
         // =========================
         // OWNER
@@ -88,6 +141,39 @@ const handler = async function (chatUpdate) {
                 .includes(m.sender)
 
             || m.fromMe
+
+        // =========================
+        // ADMINS
+        // =========================
+
+        let isAdmin = false
+        let isBotAdmin = false
+
+        if (m.isGroup) {
+
+            let groupMetadata =
+                await this.groupMetadata(
+                    m.chat
+                )
+
+            let participants =
+                groupMetadata.participants
+
+            let admins =
+                participants
+                    .filter(v => v.admin)
+                    .map(v => v.id)
+
+            isAdmin =
+                admins.includes(m.sender)
+
+            isBotAdmin =
+                admins.includes(
+                    this.user.id
+                        .split(':')[0] +
+                    '@s.whatsapp.net'
+                )
+        }
 
         // =========================
         // BEFORE EVENTS
@@ -113,7 +199,11 @@ const handler = async function (chatUpdate) {
                         {
                             conn: this,
                             chatUpdate,
-                            isOwner
+                            isOwner,
+                            isAdmin,
+                            isBotAdmin,
+                            user,
+                            chat
                         }
                     )
 
@@ -161,6 +251,19 @@ const handler = async function (chatUpdate) {
                 .toLowerCase()
 
         // =========================
+        // LOGS
+        // =========================
+
+        console.log(
+            chalk.gray('['),
+            chalk.green(command),
+            chalk.gray(']'),
+            chalk.cyan(
+                m.pushName || 'Sin nombre'
+            )
+        )
+
+        // =========================
         // PLUGINS
         // =========================
 
@@ -186,26 +289,10 @@ const handler = async function (chatUpdate) {
             // MODO ADMIN
             // =========================
 
-            let chat =
-                global.db.data.chats[m.chat]
-
             if (
                 chat.modoadmin &&
                 m.isGroup
             ) {
-
-                let groupMetadata =
-                    await this.groupMetadata(
-                        m.chat
-                    )
-
-                let admins =
-                    groupMetadata.participants
-                        .filter(v => v.admin)
-                        .map(v => v.id)
-
-                let isAdmin =
-                    admins.includes(m.sender)
 
                 if (!isAdmin && !isOwner) {
 
@@ -227,7 +314,13 @@ const handler = async function (chatUpdate) {
                         args,
                         command,
                         text: args.join(' '),
-                        isOwner
+
+                        isOwner,
+                        isAdmin,
+                        isBotAdmin,
+
+                        user,
+                        chat
                     }
                 )
 
