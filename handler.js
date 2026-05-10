@@ -1,353 +1,101 @@
 import { smsg } from './engine/simple.js'
 import { format } from 'util'
 import chalk from 'chalk'
+import { jidNormalizedUser } from '@whiskeysockets/baileys'
 
 const handler = async function (chatUpdate) {
-
     if (!chatUpdate) return
-
     let m = chatUpdate.messages?.[0]
     if (!m) return
 
     try {
-
+        // Procesar mensaje
         m = smsg(this, m) || m
         if (!m) return
 
-        // =========================
-        // DATABASE
-        // =========================
+        // Forzar base de datos
+        global.db = global.db || { data: { users: {}, chats: {}, settings: {} } }
+        if (!global.db.data.chats[m.chat]) global.db.data.chats[m.chat] = { welcome: true, sWelcome: '', welcomeType: 'custom' }
+        if (!global.db.data.users[m.sender]) global.db.data.users[m.sender] = { name: m.name || 'Usuario' }
 
-        if (global.db?.data == null) {
+        let chat = global.db.data.chats[m.chat]
+        let user = global.db.data.users[m.sender]
 
-            if (global.loadDatabase) {
-                await global.loadDatabase()
-            }
-        }
+        // --- DETECCIÓN DE OWNER ---
+        const isOwner = global.owner.some(owner => 
+            owner[0].replace(/\D/g, '') + '@s.whatsapp.net' === m.sender
+        ) || m.fromMe // <--- Aquí permitimos que responda aunque seas tú
 
-        global.db = global.db || {
-            data: {}
-        }
-
-        global.db.data.users =
-            global.db.data.users || {}
-
-        global.db.data.chats =
-            global.db.data.chats || {}
-
-        // =========================
-        // USER
-        // =========================
-
-        let user =
-            global.db.data.users[m.sender]
-
-        if (typeof user !== 'object') {
-
-            global.db.data.users[m.sender] = {}
-
-            user =
-                global.db.data.users[m.sender]
-        }
-
-        // =========================
-        // USER DATA
-        // =========================
-
-        if (!('name' in user))
-            user.name =
-                m.name || 'Sin nombre'
-
-        if (!('monedas' in user))
-            user.monedas = 100
-
-        if (!('exp' in user))
-            user.exp = 0
-
-        if (!('nivel' in user))
-            user.nivel = 1
-
-        if (!('diamantes' in user))
-            user.diamantes = 0
-
-        if (!('energia' in user))
-            user.energia = 100
-
-        if (!('bank' in user))
-            user.bank = 0
-
-        if (!('lastclaim' in user))
-            user.lastclaim = 0
-
-        if (!('premium' in user))
-            user.premium = false
-
-        if (!('banned' in user))
-            user.banned = false
-
-        // =========================
-        // CHAT
-        // =========================
-
-        let chat =
-            global.db.data.chats[m.chat]
-
-        if (typeof chat !== 'object') {
-
-            global.db.data.chats[m.chat] = {}
-
-            chat =
-                global.db.data.chats[m.chat]
-        }
-
-        // =========================
-        // CHAT DATA
-        // =========================
-
-        if (!('welcome' in chat))
-            chat.welcome = false
-
-        if (!('modoadmin' in chat))
-            chat.modoadmin = false
-
-        if (!('antilink' in chat))
-            chat.antilink = false
-
-        if (!('antillamada' in chat))
-            chat.antillamada = false
-
-        if (!('antispam' in chat))
-            chat.antispam = false
-
-        if (!('antiprivado' in chat))
-            chat.antiprivado = false
-
-        if (!('antionceview' in chat))
-            chat.antionceview = false
-
-        // =========================
-        // OWNER
-        // =========================
-
-        const isOwner =
-
-            [global.owner[0][0]]
-                .map(v =>
-                    v.replace(
-                        /[^0-9]/g,
-                        ''
-                    ) + '@s.whatsapp.net'
-                )
-                .includes(m.sender)
-
-            || m.fromMe
-
-        // =========================
-        // ADMINS
-        // =========================
-
+        // --- DETECCIÓN DE ADMINS ---
         let isAdmin = false
         let isBotAdmin = false
-
         if (m.isGroup) {
-
-            let groupMetadata =
-                await this.groupMetadata(
-                    m.chat
-                )
-
-            let participants =
-                groupMetadata.participants
-
-            let admins =
-                participants
-                    .filter(v => v.admin)
-                    .map(v => v.id)
-
-            isAdmin =
-                admins.includes(m.sender)
-
-            isBotAdmin =
-                admins.includes(
-                    this.user.id
-                        .split(':')[0] +
-                    '@s.whatsapp.net'
-                )
+            const groupMetadata = await this.groupMetadata(m.chat).catch(_ => ({}))
+            const participants = groupMetadata.participants || []
+            const admins = participants.filter(v => v.admin).map(v => v.id)
+            isAdmin = admins.includes(m.sender)
+            isBotAdmin = admins.includes(jidNormalizedUser(this.user.id))
         }
 
-        // =========================
-        // BEFORE EVENTS
-        // =========================
-
-        for (let name in global.plugins) {
-
-            let plugin =
-                global.plugins[name]
-
-            if (!plugin) continue
-
-            if (
-                typeof plugin.before ===
-                'function'
-            ) {
-
-                try {
-
-                    await plugin.before.call(
-                        this,
-                        m,
-                        {
-                            conn: this,
-                            chatUpdate,
-                            isOwner,
-                            isAdmin,
-                            isBotAdmin,
-                            user,
-                            chat
-                        }
-                    )
-
-                } catch (e) {
-
-                    console.log(
-                        chalk.redBright(
-                            `❌ Error before ${name}`
-                        )
-                    )
-
-                    console.error(e)
-                }
-            }
-        }
-
-        // =========================
-        // PREFIX
-        // =========================
-
-        const prefix =
-            global.prefix || /^[.#]/i
-
-        const match =
-            prefix.exec(m.body || '')
-
+        // --- LÓGICA DE PREFIJO ---
+        const prefix = global.prefix || /^[.#]/i
+        const match = prefix.exec(m.body || '')
+        
+        // Si no es comando, ignorar
         if (!match) return
 
-        const usedPrefix =
-            match[0]
+        const usedPrefix = match[0]
+        const noPrefix = m.body.replace(usedPrefix, '').trim()
+        let [command, ...args] = noPrefix.split(' ')
+        command = (command || '').toLowerCase()
 
-        const noPrefix =
-            m.body.replace(
-                usedPrefix,
-                ''
-            )
+        if (!command) return
 
-        let [command, ...args] =
-            noPrefix
-                .trim()
-                .split(' ')
+        // LOG EN CONSOLA (Si ves esto, el bot llegó aquí)
+        console.log(chalk.bgGreen.black(' EJECUTANDO '), chalk.white(`[ ${command} ]`), chalk.cyan(`por ${m.pushName || 'Owner'}`))
 
-        command =
-            (command || '')
-                .toLowerCase()
-
-        // =========================
-        // LOGS
-        // =========================
-
-        console.log(
-            chalk.gray('['),
-            chalk.green(command),
-            chalk.gray(']'),
-            chalk.cyan(
-                m.pushName || 'Sin nombre'
-            )
-        )
-
-        // =========================
-        // PLUGINS
-        // =========================
-
+        // --- BÚSQUEDA DE PLUGINS ---
+        let found = false
         for (let name in global.plugins) {
+            let plugin = global.plugins[name]
+            if (!plugin || plugin.disabled) continue
 
-            let plugin =
-                global.plugins[name]
-
-            if (!plugin) continue
-            if (plugin.disabled) continue
-
-            let isAccept =
-
-                Array.isArray(plugin.command)
-
-                    ? plugin.command.includes(command)
-
-                    : plugin.command === command
+            const isAccept = Array.isArray(plugin.command) 
+                ? plugin.command.includes(command) 
+                : plugin.command === command
 
             if (!isAccept) continue
+            found = true
 
-            // =========================
-            // MODO ADMIN
-            // =========================
-
-            if (
-                chat.modoadmin &&
-                m.isGroup
-            ) {
-
-                if (!isAdmin && !isOwner) {
-
-                    return m.reply(
-                        '❌ El modo admin está activado'
-                    )
-                }
-            }
+            // Saltarse validaciones si es el Owner para probar
+            if (plugin.owner && !isOwner) return m.reply('❌ Solo dueño.')
+            if (plugin.admin && !isAdmin && !isOwner) return m.reply('❌ Solo admins.')
 
             try {
-
-                await plugin.call(
-                    this,
-                    m,
-                    {
-                        conn: this,
-                        usedPrefix,
-                        noPrefix,
-                        args,
-                        command,
-                        text: args.join(' '),
-
-                        isOwner,
-                        isAdmin,
-                        isBotAdmin,
-
-                        user,
-                        chat
-                    }
-                )
-
+                await plugin.call(this, m, {
+                    conn: this,
+                    usedPrefix,
+                    args,
+                    command,
+                    text: args.join(' '),
+                    isOwner,
+                    isAdmin,
+                    isBotAdmin,
+                    chat,
+                    user
+                })
             } catch (e) {
-
-                console.log(
-                    chalk.redBright(
-                        `❌ Error en plugin ${name}`
-                    )
-                )
-
-                console.error(e)
+                console.error(chalk.red(`Error en ${name}:`), e)
+                this.sendMessage(m.chat, { text: `❌ Error: ${e.message}` }, { quoted: m })
             }
-
-            break
+            break 
         }
 
-    } catch (e) {
+        if (!found) console.log(chalk.yellow(`[!] El comando "${command}" no existe en los plugins.`))
 
-        console.error(
-            chalk.red(
-                format(e)
-            )
-        )
+    } catch (e) {
+        console.error(format(e))
     }
 }
 
-export {
-    handler
-}
+export { handler }
