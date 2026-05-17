@@ -18,6 +18,7 @@
     "cfonts": "^3.3.0",
     "chalk": "^4.1.2",
     "figlet": "^1.7.0",
+    "jimp": "^0.22.12",
     "node-cache": "^5.1.2",
     "pino": "latest",
     "qrcode-terminal": "^0.12.0",
