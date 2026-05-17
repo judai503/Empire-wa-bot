@@ -1,3 +1,4 @@
+// index.js
 process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '1';
 import './config.js'; 
 import cfonts from 'cfonts';
@@ -28,7 +29,6 @@ import {
 
 // Carga directa de la serialización ligera
 import './engine/simple.js'; 
-import { handler } from './handler.js';
 
 // Configuración de rutas globales
 global.__filename = function filename(pathURL = import.meta.url, rmPrefix = platform !== 'win32') {
@@ -50,7 +50,22 @@ cfonts.say('EMPIRE', {
     gradient: ['cyan', 'magenta']
 });
 
-// Cargador de comandos
+// ==========================================
+// CARGADOR DINÁMICO DEL HANDLER
+// ==========================================
+global.handler = null;
+global.reloadHandler = async function (announcement = true) {
+    try {
+        const handlerPath = pathToFileURL(path.join(__dirname, 'handler.js')).href;
+        const module = await import(`${handlerPath}?update=${Date.now()}`);
+        global.handler = module.handler;
+        if (announcement) console.log(chalk.bold.greenBright("[✓] Sistema de eventos 'handler.js' sincronizado con éxito."));
+    } catch (e) {
+        console.error(chalk.red("❌ Error crítico recargando 'handler.js':"), e);
+    }
+};
+
+// Cargador de comandos optimizado con marcas de tiempo dinámicas
 async function loadPlugins() {
     const pluginFolder = fs.existsSync(path.join(__dirname, 'sword')) ? 'sword' : 'plugins';
     const folderPath = path.join(__dirname, pluginFolder);
@@ -63,6 +78,7 @@ async function loadPlugins() {
     for (const file of files) {
         try {
             const filePath = pathToFileURL(path.join(folderPath, file)).href;
+            // El ?update=${Date.now()} destruye la caché vieja al re-importar
             const plugin = await import(`${filePath}?update=${Date.now()}`);
             global.plugins[file] = plugin.default || plugin;
         } catch (e) {
@@ -90,6 +106,7 @@ async function startBot() {
     const { version } = await fetchLatestBaileysVersion();
     
     await loadPlugins();
+    await global.reloadHandler(false); 
 
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     const question = (text) => new Promise((resolve) => rl.question(text, resolve));
@@ -190,8 +207,15 @@ async function startBot() {
         }
     });
 
+    // Lector de Eventos Dinámico
     conn.ev.on('messages.upsert', async (chatUpdate) => {
-        try { await handler.call(conn, chatUpdate); } catch (e) {}
+        try { 
+            if (global.handler) {
+                await global.handler.call(conn, chatUpdate); 
+            }
+        } catch (e) {
+            console.error(e);
+        }
     });
 }
 
@@ -219,5 +243,25 @@ setInterval(() => {
 
 process.on('uncaughtException', console.error);
 process.on('unhandledRejection', (reason) => console.error("Rechazo no manejado:", reason));
+
+// ==========================================
+// MONITOR DE COMANDOS EN VIVO (HOT RELOAD)
+// ==========================================
+const pluginFolder = fs.existsSync(path.join(__dirname, 'sword')) ? 'sword' : 'plugins';
+const folderPath = path.join(__dirname, pluginFolder);
+
+if (fs.existsSync(folderPath)) {
+    fs.watch(folderPath, async (eventType, filename) => {
+        if (filename && filename.endsWith('.js')) {
+            console.log(chalk.bold.magenta(`\n🛠️ [EMPIRE - RECARGA] Se detectó un cambio en: /${pluginFolder}/${filename}`));
+            try {
+                // Vuelve a mapear todos los plugins aplicando la marca de tiempo anti-caché
+                await global.loadPlugins();
+            } catch (e) {
+                console.error(chalk.red(`❌ Error recargando comandos tras modificar ${filename}:`), e);
+            }
+        }
+    });
+}
 
 startBot();
