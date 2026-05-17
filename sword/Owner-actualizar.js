@@ -1,5 +1,5 @@
 // * 👤 CREADOR: El tío Judai
-// * 🏰 COMPONENTE: Sistema de Auto-Actualización EMPIRE
+// * 🏰 COMPONENTE: Sistema de Auto-Actualización EMPIRE (FORZADO CON RESET)
 // * 🌐 REPOSITORIO: https://github.com/judai503/Empire-wa-bot
 
 import { exec } from 'child_process'
@@ -8,39 +8,33 @@ import { promisify } from 'util'
 const execPromise = promisify(exec)
 
 let handler = async (m, { conn, usedPrefix, command }) => {
-    // Mensaje inicial estilizado de EMPIRE
     await conn.sendMessage(m.chat, {
-        text: `🚀 *﹝ EMPIRE - REPOSITORIO ﹞* 🚀\n──────────────────────────────\n\n🔄 *Iniciando proceso de sincronización...*\n\n📡 Conectando con: \`judai503/Empire-wa-bot\` (Rama: main)\n📥 Buscando actualizaciones en el servidor Git, por favor espera...`
+        text: `🚀 *﹝ EMPIRE - REPOSITORIO ﹞* 🚀\n──────────────────────────────\n\n🔄 *Iniciando sincronización forzada...*\n\n📡 Conectando con: \`judai503/Empire-wa-bot\` (Rama: main)\n📥 Limpiando caché local del hosting y descargando código limpio...`
     }, { quoted: m })
 
     try {
-        // Asegurar que Git apunte a tu rama remota correcta
+        // 1. Asegurar la URL remota
         await execPromise('git remote set-url origin https://github.com/judai503/Empire-wa-bot.git').catch(() => {})
         
-        // Ejecutar la descarga de cambios
-        const { stdout, stderr } = await execPromise('git pull origin main')
+        // 2. Traer los cambios del servidor sin combinarlos todavía
+        await execPromise('git fetch origin main')
+        
+        // 3. CRÍTICO: Forzar a Git a borrar cualquier cambio hecho en el panel y ponerse IGUAL a GitHub
+        await execPromise('git reset --hard origin/main')
 
-        // Validar si ya está al día
-        if (stdout.includes('Already up to date') || stdout.includes('Ya está al día')) {
-            return conn.sendMessage(m.chat, {
-                text: `🏰 *﹝ EMPIRE - NÚCLEO ﹞* 🏰\n──────────────────────────────\n\n✅ *El bot ya se encuentra en su versión más reciente.*\n\n📊 *Estado:* Sincronizado con GitHub.\n✨ No hay cambios pendientes por aplicar.`
-            }, { quoted: m })
-        }
-
-        // Si se descargaron archivos nuevos
-        let updateText = `🏰 *﹝ EMPIRE - ACTUALIZADO ﹞* 🏰\n──────────────────────────────\n\n⚡ *¡Actualización descargada con éxito!*\n\n📝 *Archivos modificados:*\n\`\`\`${stdout}\`\`\`\n\n🔄 *Reiniciando el sistema principal para aplicar los cambios...*`
+        // 4. Confirmar el estado de la descarga
+        let updateText = `🏰 *﹝ EMPIRE - ACTUALIZADO ﹞* 🏰\n──────────────────────────────\n\n⚡ *¡Sincronización forzada completada con éxito!*\n\n El hosting se ha alineado al 100% con tu repositorio de GitHub.\n\n🔄 *Reiniciando los sistemas principales...*`
         
         await conn.sendMessage(m.chat, { text: updateText }, { quoted: m })
 
-        // Forzar el apagado controlado (El panel AkiraX o PM2 lo encenderá al instante con el código nuevo)
+        // Forzar apagado para que PM2/AkiraX lo levante con el código nuevo
         setTimeout(() => {
             process.exit(0)
         }, 2000)
 
     } catch (e) {
         console.error(e)
-        // Manejo de errores por conflictos de archivos editados en el panel
-        let errorText = `🛡️ *﹝ EMPIRE - CRITICAL ERROR ﹞* 🛡️\n──────────────────────────────\n\n❌ *Ocurrió un fallo al intentar sincronizar con GitHub.*\n\n⚠️ *Causa común:* Modificaste archivos directamente desde el panel de tu hosting y Git no puede combinarlos con los de GitHub de forma automática.\n\n📝 *Detalle técnico:*\n\`\`\`${e.message}\`\`\``
+        let errorText = `🛡️ *﹝ EMPIRE - CRITICAL ERROR ﹞* 🛡️\n──────────────────────────────\n\n❌ *Fallo severo al resetear el repositorio.*\n\n\`\`\`${e.message}\`\`\``
         
         conn.sendMessage(m.chat, { text: errorText }, { quoted: m })
     }
@@ -50,7 +44,6 @@ handler.help = ['update']
 handler.tags = ['owner']
 handler.command = ['update', 'actualizar', 'gitpull']
 
-// RESTRICCIÓN: Solo tú (Owner/Creador del bot) puedes usar este comando
 handler.rowner = true 
 
 export default handler
