@@ -1,5 +1,5 @@
 // * 👤 CREADOR: Barboza Developer
- //* ⚡ CANAL: Barboza Developer x Zona Developers
+// * ⚡ CANAL: Barboza Developer x Zona Developers
 // adaptado por el tio judai
 
 import axios from 'axios'
@@ -20,32 +20,36 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
         // 1. BÚSQUEDA EN SPOTIFY
         let search = await axios.get(`https://api.evogb.org/search/spotify?query=${encodeURIComponent(query)}&key=${key}`)
 
-        if (!search.data.status || !search.data.result.length) {
-            return conn.reply(m.chat, '❌ No se encontraron resultados.', m)
+        if (!search.data.status || !search.data.result || !search.data.result.length) {
+            return conn.reply(m.chat, '❌ No se encontraron resultados para tu búsqueda.', m)
         }
 
         let track = search.data.result[0]
-        // CORRECCIÓN: Se usan backticks `` y el signo $ para la variable
+        
+        // CORRECCIÓN PERMANENTE: Construcción correcta del enlace real de Spotify usando el ID devuelto
         let trackUrl = `https://open.spotify.com/track/${track.id}`
 
         // 2. DESCARGA
         let dl = await axios.get(`https://api.evogb.org/dl/spotify?url=${encodeURIComponent(trackUrl)}&key=${key}`)
 
-        if (!dl.data.status) {
-            return conn.reply(m.chat, '❌ Error al obtener el enlace de descarga.', m)
+        if (!dl.data.status || !dl.data.data) {
+            return conn.reply(m.chat, '❌ Error de la API al procesar el enlace de descarga.', m)
         }
 
         let data = dl.data.data
-        let txt = `✨ *SPOTIFY DOWNLOAD*\n\n` +
-                  `➜ *Título:* ${data.name}\n` +
-                  `➜ *Artista:* ${data.artist}\n` +
-                  `➜ *Álbum:* ${data.album}\n` +
-                  `➜ *Duración:* ${data.duration}\n\n` +
-                  `_Enviando audio, espera un momento..._`
+        let txt = `🏰 *﹝ EMPIRE - SPOTIFY DOWNLOAD ﹞* 🏰\n──────────────────────────────\n\n` +
+                  `🎵 *Título:* ${data.name || 'Desconocido'}\n` +
+                  `👤 *Artista:* ${data.artist || 'Desconocido'}\n` +
+                  `💿 *Álbum:* ${data.album || 'Desconocido'}\n` +
+                  `⏱️ *Duración:* ${data.duration || 'Desconocida'}\n\n` +
+                  `*📥 Enviando el audio, por favor espera...*`
+
+        // Validar que exista una portada válida antes de mandar
+        let coverUrl = data.imageHD || data.image || track.image || 'https://raw.githubusercontent.com/wandersonsc01/spotify-downloader/main/assets/icon.png'
 
         // Enviar imagen con información
         await conn.sendMessage(m.chat, {
-            image: { url: data.imageHD || data.image },
+            image: { url: coverUrl },
             caption: txt
         }, { quoted: m })
 
@@ -53,14 +57,13 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
         await conn.sendMessage(m.chat, {
             audio: { url: data.url },
             mimetype: 'audio/mpeg',
-            fileName: `${data.name}.mp3`
+            fileName: `${data.name || 'audio'}.mp3`
         }, { quoted: m })
 
     } catch (e) {
         console.error(e)
-        // Manejo de error seguro
         if (conn && m.chat) {
-            conn.reply(m.chat, '❌ Ocurrió un error inesperado. Verifica la consola.', m)
+            conn.reply(m.chat, '❌ Ocurrió un error inesperado al procesar la descarga de Spotify.', m)
         }
     }
 }
