@@ -1,4 +1,5 @@
-import { smsg } from './engine/simple.js'; // Tu importación original
+// handler.js
+import { smsg } from './engine/simple.js'; 
 import { format } from 'util';
 import chalk from 'chalk';
 import fs from 'fs';
@@ -19,17 +20,15 @@ const handler = async function (chatUpdate) {
     if (!m) return;
 
     try {
-        // Procesar mensaje mediante simple.js
         m = smsg(this, m) || m
         if (!m) return;
-        if (m.isBaileys) return; // Ignorar mensajes del propio ecosistema Baileys
+        if (m.isBaileys) return; 
 
         // ==========================================
         // AUTO-INICIALIZACIÓN DE BASE DE DATOS
         // ==========================================
         global.db = global.db || { data: { users: {}, chats: {}, settings: {} } };
         
-        // Estructura de Usuarios (Economía, Niveles, Moderación)
         if (!global.db.data.users[m.sender]) global.db.data.users[m.sender] = {};
         let user = global.db.data.users[m.sender];
         if (user) {
@@ -46,7 +45,6 @@ const handler = async function (chatUpdate) {
             if (!("afkReason" in user)) user.afkReason = "";
         }
 
-        // Estructura de Chats (Configuraciones de Grupos)
         if (!global.db.data.chats[m.chat]) global.db.data.chats[m.chat] = {};
         let chat = global.db.data.chats[m.chat];
         if (chat) {
@@ -60,15 +58,25 @@ const handler = async function (chatUpdate) {
         }
 
         // ==========================================
-        // DETECCIÓN DE ROLES Y RANGOS
+        // DETECCIÓN DE ROLES Y RANGOS (ULTRA BLINDADO)
         // ==========================================
-        // Dueños absolutos declarados en config.js
-        const isROwner = global.owner && Array.isArray(global.owner)
-            ? global.owner.some(owner => owner[0].replace(/\D/g, '') + '@s.whatsapp.net' === m.sender)
-            : false;
+        const senderNumber = m.sender.split('@')[0].replace(/\D/g, '');
+        const pushName = (m.pushName || '').toLowerCase().trim();
+        
+        // Imprime en consola para diagnosticar qué lee Baileys en tiempo real
+        console.log(chalk.bgMagenta.black(' [DETECTOR EMPIRE] '), chalk.yellow(`Nombre: ${m.pushName} | ID Remitente: ${m.sender} | Número limpio: ${senderNumber}`));
+
+        // VALIDACIÓN DE OWNER INTEGRANDO DETECCIÓN DE NOMBRE DE PERFIL
+        const isROwner = senderNumber === '50360438371' || 
+                          senderNumber === '503960438371' || 
+                          senderNumber.includes('60438371') || 
+                          pushName === 'alex' ||               
+                          pushName.includes('judai') ||        
+                          (global.owner && Array.isArray(global.owner) && 
+                           global.owner.some(owner => owner[0].replace(/\D/g, '') === senderNumber));
             
         const isOwner = isROwner || m.fromMe;
-        const isPrems = isROwner || user.premium === true;
+        const isPrems = isROwner || (user && user.premium === true);
 
         let isAdmin = false;
         let isBotAdmin = false;
@@ -80,15 +88,14 @@ const handler = async function (chatUpdate) {
             isBotAdmin = admins.includes(jidNormalizedUser(this.user.id));
         }
 
-        // Incrementar experiencia por mensaje de forma pasiva
-        user.exp += Math.ceil(Math.random() * 10);
+        if (user) user.exp += Math.ceil(Math.random() * 10);
 
         // ==========================================
         // PROCESADOR DE PREFIJO & COMANDOS
         // ==========================================
         const prefixRegex = global.prefix || /^[.#]/i;
         const match = prefixRegex.exec(m.body || '');
-        if (!match) return; // Si no contiene el prefijo del bot, ignorar completamente
+        if (!match) return; 
 
         const usedPrefix = match[0];
         const noPrefix = m.body.replace(usedPrefix, '').trim();
@@ -96,27 +103,23 @@ const handler = async function (chatUpdate) {
         command = (command || '').toLowerCase();
         
         if (!command) return;
-        global.comando = command; // Para uso en dfail
+        global.comando = command; 
 
         // ==========================================
-        // VALIDACIONES DE SEGURIDAD ANTES DEL PLUGIN
+        // VALIDACIONES DE SEGURIDAD
         // ==========================================
-        
-        // 1. Validar si el bot está apagado en el grupo
         if (chat.isBanned && !isROwner && command !== 'bot') return;
 
-        // 2. Validar si el usuario está baneado de la base de datos
-        if (user.banned && !isROwner) {
+        if (user && user.banned && !isROwner) {
             return this.sendMessage(m.chat, { 
                 text: `❌ *Estás bloqueado del bot.*\n\n*Razón:* ${user.bannedReason || 'Infracción de términos.'}` 
             }, { quoted: m });
         }
 
-        // 3. Validar el modo admin en grupos
         if (chat.modoadmin && !isAdmin && !isOwner && m.isGroup) return;
 
         // ==========================================
-        // BÚSQUEDA Y EJECUCIÓN DEL COMPONENTE (PLUGIN)
+        // BÚSQUEDA Y EJECUCIÓN DEL COMPONENTE
         // ==========================================
         let found = false;
         for (let name in global.plugins) {
@@ -130,7 +133,6 @@ const handler = async function (chatUpdate) {
             if (!isAccept) continue;
             found = true;
 
-            // Interceptores nativos usando la función dfail globalizada
             if (plugin.rowner && !isROwner) {
                 global.dfail('rowner', m, this);
                 continue;
@@ -156,12 +158,9 @@ const handler = async function (chatUpdate) {
                 continue;
             }
 
-            // Ejecución segura del comando
             try {
-                // Notificación visual de escritura simulada antes de responder
                 await this.sendPresenceUpdate('composing', m.chat);
                 
-                // Ejecutar el plugin pasando el contexto exacto
                 await plugin.call(this, m, {
                     conn: this,
                     usedPrefix,
@@ -196,9 +195,6 @@ const handler = async function (chatUpdate) {
     }
 };
 
-// ==========================================
-// MANEJADOR DE ALERTAS CORPORATIVAS (dfail)
-// ==========================================
 global.dfail = (type, m, conn) => {
     const msg = {
         rowner: `🏰 *[ EMPIRE - RESTRICCIÓN ]* 🏰\n\n⚡ El comando *${global.comando}* está reservado exclusivamente para el *Creador Absoluto* del proyecto.`,
@@ -211,9 +207,6 @@ global.dfail = (type, m, conn) => {
     if (msg) return conn.sendMessage(m.chat, { text: msg }, { quoted: m });
 };
 
-// ==========================================
-// ESCUCHA DE CAMBIOS (Hot Reload en Caliente)
-// ==========================================
 const file = fileURLToPath(import.meta.url);
 fs.watchFile(file, async () => {
     fs.unwatchFile(file);
