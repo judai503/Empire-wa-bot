@@ -1,75 +1,93 @@
+// * 📂 COMANDO: Uchiha Spotify Downloader
+// * 📝 DESCRIPCIÓN: Extractor de audio de Spotify (Búsqueda + Descarga).
 // * 👤 CREADOR: Barboza Developer
 // * ⚡ CANAL: Barboza Developer x Zona Developers
-// adaptado por el tio judai
+// * 🏰 ADAPTACIÓN: El tío Judai (Empire Bot Core)
 
 import axios from 'axios'
 
 let handler = async (m, { conn, text, usedPrefix, command }) => {
-    // Definimos query y verificamos si hay texto
-    let query = text || (m.quoted && (m.quoted.text || m.quoted.caption))
+    // Créditos obligatorios del creador original
+    const dev = "𝘽𝙮 𝘽𝙖𝙧𝙗𝙤𝙯𝙖"
+    const chn = "𝙕𝙤𝙣𝙖 𝘿𝙚𝙫𝙚𝙡𝙤𝙥𝙚𝙧𝙨"
     
-    if (!query) {
-        return conn.reply(m.chat, `✨ *INGRESA EL NOMBRE DE UNA CANCIÓN*\n\n➜ Ejemplo:\n${usedPrefix + command} Provenza`, m)
+    if (!text) {
+        return conn.sendMessage(m.chat, { 
+            text: `🎵 *﹝ EMPIRE - SPOTIFY ﹞* 🎵\n──────────────────────────────\n\n⚠️ *Por favor, ingresa el nombre de una canción o un enlace de Spotify.*\n\n💡 *Ejemplo:* ${usedPrefix + command} Mask Off` 
+        }, { quoted: m })
     }
 
+    await conn.sendMessage(m.chat, { react: { text: '⚡', key: m.key } })
+
     try {
-        // Clave de API (Reverse de tu lógica original)
-        const _0x4a1b = 'ZWt1c2Fz'
-        const key = Buffer.from(_0x4a1b, 'base64').toString('utf-8').split('').reverse().join('')
+        // Desencriptación nativa de la API oficial de Barboza
+        const b = (s) => Buffer.from(s, 'base64').toString('utf-8')
+        const endpointBase = b("aHR0cHM6Ly9hcGkuZXZvZ2Iub3Jn")
+        const apiKey = b("c2FzdWtl")
 
-        // 1. BÚSQUEDA EN SPOTIFY
-        let search = await axios.get(`https://api.evogb.org/search/spotify?query=${encodeURIComponent(query)}&key=${key}`)
+        let trackUrl = text
+        const isUrl = text.match(/^(https?:\/\/)?(open\.spotify\.com|spotify\.link)\/.+$/gi)
 
-        if (!search.data.status || !search.data.result || !search.data.result.length) {
-            return conn.reply(m.chat, '❌ No se encontraron resultados para tu búsqueda.', m)
+        // 1. SI ES TEXTO, HACEMOS LA BÚSQUEDA PRIMERO
+        if (!isUrl) {
+            const searchApi = `${endpointBase}/search/spotify?query=${encodeURIComponent(text)}&key=${apiKey}`
+            const sRes = await axios.get(searchApi)
+            const sData = sRes.data
+
+            if (!sData.status || !sData.result || !sData.result.length) {
+                await conn.sendMessage(m.chat, { react: { text: '❌', key: m.key } })
+                return conn.sendMessage(m.chat, { text: '🏮 *[ ERROR ]* No se encontró ninguna canción con ese nombre.' }, { quoted: m })
+            }
+            trackUrl = sData.result[0].link
         }
 
-        let track = search.data.result[0]
-        
-        // CORRECCIÓN PERMANENTE: Construcción correcta del enlace real de Spotify usando el ID devuelto
-        let trackUrl = `https://open.spotify.com/track/${track.id}`
+        // 2. HACEMOS LA DESCARGA DIRECTA DE LA PISTA
+        const downloadApi = `${endpointBase}/dl/spotify?url=${encodeURIComponent(trackUrl)}&key=${apiKey}`
+        const dlRes = await axios.get(downloadApi)
+        const dlData = dlRes.data
 
-        // 2. DESCARGA
-        let dl = await axios.get(`https://api.evogb.org/dl/spotify?url=${encodeURIComponent(trackUrl)}&key=${key}`)
-
-        if (!dl.data.status || !dl.data.data) {
-            return conn.reply(m.chat, '❌ Error de la API al procesar el enlace de descarga.', m)
+        if (!dlData.status || !dlData.data) {
+            await conn.sendMessage(m.chat, { react: { text: '❌', key: m.key } })
+            return conn.sendMessage(m.chat, { text: '🏮 *[ FALLO ]* Error interno al intentar extraer el audio de Spotify.' }, { quoted: m })
         }
 
-        let data = dl.data.data
-        let txt = `🏰 *﹝ EMPIRE - SPOTIFY DOWNLOAD ﹞* 🏰\n──────────────────────────────\n\n` +
-                  `🎵 *Título:* ${data.name || 'Desconocido'}\n` +
-                  `👤 *Artista:* ${data.artist || 'Desconocido'}\n` +
-                  `💿 *Álbum:* ${data.album || 'Desconocido'}\n` +
-                  `⏱️ *Duración:* ${data.duration || 'Desconocida'}\n\n` +
-                  `*📥 Enviando el audio, por favor espera...*`
+        const info = dlData.data
 
-        // Validar que exista una portada válida antes de mandar
-        let coverUrl = data.imageHD || data.image || track.image || 'https://raw.githubusercontent.com/wandersonsc01/spotify-downloader/main/assets/icon.png'
+        // Estructura visual premium al estilo Empire Bot manteniendo créditos intactos
+        let txt = `🎵 *﹝ EMPIRE SPOTIFY ﹞* 🎵\n──────────────────────────────\n\n`
+        txt += `📌 *Tɪ́ᴛᴜʟᴏ:* ${info.name || 'Desconocido'}\n`
+        txt += `👤 *Aʀᴛɪsᴛᴀ:* ${info.artist || 'Desconocido'}\n`
+        txt += `💿 *Áʟʙᴜμ:* ${info.album || 'Desconocido'}\n`
+        txt += `⏱️ *Dᴜʀᴀᴄɪᴏ́ɴ:* ${info.duration || '--:--'}\n\n`
+        txt += `⚙️ *Esᴛᴀᴅᴏ:* 🟢 Audio Inyectado con Éxito\n`
+        txt += `──────────────────────────────\n`
+        txt += `⚡ *${dev}* \n`
+        txt += `📡 *${chn}*`
 
-        // Enviar imagen con información
-        await conn.sendMessage(m.chat, {
-            image: { url: coverUrl },
-            caption: txt
+        // Enviar portada HD de la canción
+        await conn.sendMessage(m.chat, { 
+            image: { url: info.imageHD || info.image }, 
+            caption: txt 
         }, { quoted: m })
 
-        // Enviar el archivo de audio
-        await conn.sendMessage(m.chat, {
-            audio: { url: data.url },
-            mimetype: 'audio/mpeg',
-            fileName: `${data.name || 'audio'}.mp3`
+        // Enviar el archivo de audio nativo .mp3
+        await conn.sendMessage(m.chat, { 
+            audio: { url: info.url }, 
+            mimetype: 'audio/mpeg', 
+            fileName: `${info.name}.mp3` 
         }, { quoted: m })
+
+        await conn.sendMessage(m.chat, { react: { text: '🔥', key: m.key } })
 
     } catch (e) {
-        console.error(e)
-        if (conn && m.chat) {
-            conn.reply(m.chat, '❌ Ocurrió un error inesperado al procesar la descarga de Spotify.', m)
-        }
+        console.error('Error en Spotify Plugin:', e)
+        await conn.sendMessage(m.chat, { react: { text: '❌', key: m.key } })
+        return conn.sendMessage(m.chat, { text: `❌ *Fallo de conexión con la API:* ${e.message}` }, { quoted: m })
     }
 }
 
 handler.help = ['spotify']
-handler.tags = ['downloader']
-handler.command = ['spotify', 'spotdl', 'spotifydl']
+handler.tags = ['descargas']
+handler.command = ['spotify', 'sp', 'music', 'spt']
 
 export default handler
